@@ -142,6 +142,32 @@ npm i
 npm start
 ```
 
+### How to run from windows MSI file on Linux (need lastest Node.js & NPM):
+
+1. Download Windows installer (.MSI) and download Lutris (https://github.com/lutris). 
+
+2. Use Lutris to add a new game by pressing "+", go through steps to prepare to install then when prompted browse to find the sysmocap windows installer MSI file then select and install to run the installer. Close when done. 
+
+3. Configure the game in Lutris with the dropdown menu beside the play button. Configure to use:
+   A. Top Unix/Ubuntu/Linux 9 repack/rebuild runner
+   B. Use Lutris Support
+   C. Turn off bottom fullscreen option
+   D. Turn off any DRM option
+   C. Turn on DPI scaling
+   D. Use system libraries
+   E. Setup your GPU or setup to use your on-board integrated graphics (but do not turn on discrete handling option anywhere) 
+
+5. Run SysMocap in lutris and setup your import, set your import and use any dropdown menu to setup to use upon next load-in. Basically get everything ready. exit when done.
+
+6. Configure the game in Lutris with the dropdown menu beside the play button. Configure to use:
+   A. Use Windows wow runner
+   B. Don't change options other than runner and wine configuration
+
+7. SysMocap should now be playable and if you don't need to change any setting or your picked avatar, you can click run to activate the selected model and run the program.
+
+   **NOTE: you can switch back to the top Unix/Linux/Ubuntu 9 rebuild/repack runner to adjust settings or can have multiple instances all pre-configured differently then run back through windows wow runner for GPU and camera pass through. DroidCam X did work with this setup.**
+
+
 ### Notice
 
 1. HTTP & HTTPS will use **same port** in Mocap Data Forward.
