@@ -1,0 +1,52 @@
+{
+  "name": "bitninja-mocap-lite",
+  "version": "0.8.3-mod1L",
+  "description": "A local-only, OBS-focused lightweight SysMocap fork for one-webcam VRM capture.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "package:mac64": "npx @electron/packager ./ SysMocap --icon=icons/sysmocap.icns --platform=darwin --arch=x64 --out ./OutApp --overwrite --usage-description.Camera='该程序需要摄像头权限' --electronVersion 31.1.0 --asar",
+    "package:macarm": "npx @electron/packager ./ SysMocap --icon=icons/sysmocap.icns --platform=darwin --arch=arm64 --out ./OutApp --overwrite --usage-description.Camera='该程序需要摄像头权限' --electronVersion 31.1.0 --asar",
+    "package:win64": "npx @electron/packager ./ SysMocap --icon=icons/sysmocap.ico --platform=win32 --arch=x64 --out ./OutApp --overwrite --electronVersion 31.1.0 --asar",
+    "package:winarm": "npx @electron/packager ./ SysMocap --icon=icons/sysmocap.ico --platform=win32 --arch=arm64 --out ./OutApp --overwrite --electronVersion 31.1.0 --asar",
+    "7z:win64": "7z a -t7z -mx=9 -y ./OutApp/packages/SysMocap-Windows-x64.7z ./OutApp/SysMocap-win32-x64/",
+    "7z:winarm": "7z a -t7z -mx=9 -y ./OutApp/packages/SysMocap-Windows-arm64.7z ./OutApp/SysMocap-win32-arm64/",
+    "dmgtool": "npm install -g appdmg",
+    "dmg": "node builddmgjsonx86.js && cat dmgcfg.json && node `npm root -g`/appdmg/bin/appdmg.js ./dmgcfg.json ./OutApp/packages/SysMocap-macOS-x64.dmg && rm ./dmgcfg.json",
+    "dmgarm": "node builddmgjsonarm.js && cat dmgcfg.json && node `npm root -g`/appdmg/bin/appdmg.js ./dmgcfg.json ./OutApp/packages/SysMocap-macOS-arm64.dmg && rm ./dmgcfg.json",
+    "msix64": "node buildmsi.js x64",
+    "msixarm": "node buildmsi.js arm64",
+    "start:nvidia": "BITNINJA_FORCE_NVIDIA=1 __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia __VK_LAYER_NV_optimus=NVIDIA_only electron .",
+    "start:mesa": "BITNINJA_FORCE_MESA=1 electron ."
+  },
+  "author": "xianfei",
+  "license": "ISC",
+  "dependencies": {
+    "@electron/remote": "^2.1.2",
+    "@material/material-color-utilities": "^0.2.7",
+    "@mediapipe/camera_utils": "^0.3.1675466862",
+    "@mediapipe/drawing_utils": "^0.3.1675466124",
+    "@mediapipe/holistic": "^0.5.1675471629",
+    "@mediapipe/pose": "^0.5.1675469404",
+    "@pixiv/three-vrm": "^2.1.2",
+    "color": "^4.2.3",
+    "electron-localstorage": "^1.0.5",
+    "express": "^4.18.2",
+    "express-ws": "^5.0.2",
+    "github-version-checker": "^2.3.0",
+    "kalidokit": "^1.1.5",
+    "lil-gui": "^0.16.1",
+    "mdui": "^1.0.2",
+    "socket.io": "^4.5.3",
+    "svelte-jsoneditor": "^0.3.60",
+    "three": "^0.164.1",
+    "vue": "^2.7.14"
+  },
+  "devDependencies": {
+    "@electron/packager": "^18.3.3",
+    "electron": "^31.1.0",
+    "electron-installer-dmg": "^5.0.1",
+    "fs-extra": "^11.2.0"
+  },
+  "productName": "Bitninja Mocap Lite"
+}
