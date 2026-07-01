@@ -537,7 +537,7 @@ if (typeof require != "undefined") {
         }
     }
 
-    // Bitninja Stage 9T: camera selector cleanup.
+    // Bitninja Stage 10 mod1OT: camera selector cleanup.
     // MDUI Select creates extra DOM wrappers. Rebuilding without cleanup causes
     // one more visible dropdown each time "Refresh Sources" is clicked.
     window.bitninjaCameraSelect = window.bitninjaCameraSelect || null;

@@ -7,7 +7,7 @@ const storage = require("electron-localstorage");
 var remote = require("@electron/remote");
 storage.setStoragePath(remote.getGlobal("storagePath").jsonPath);
 
-var currentVer = 0.7321;
+var currentVer = 0.7330;
 
 const defaultSettings = {
     ui: {
@@ -101,10 +101,19 @@ function mergeDefaults(target, defaults) {
 function applyLiteLocks(settings) {
     settings = mergeDefaults(settings, defaultSettings);
 
-    // Hard-disable services/features the Lite fork does not use.
-    settings.forward.enableForwarding = false;
-    settings.forward.useSSL = false;
-    settings.forward.supportForWebXR = false;
+    // mod1O: keep local OBS defaults, but allow explicit HTTP/WebSocket activation.
+    const onlineEnabled = !!(settings.lite && settings.lite.allowHttpWebSocketWithUpdates);
+    settings.forward.enableForwarding = onlineEnabled;
+    if (onlineEnabled) {
+        settings.lite.localOnly = false;
+        if (!settings.forward.port) settings.forward.port = "8080";
+        settings.forward.useSSL = !!settings.forward.useSSL;
+        settings.forward.supportForWebXR = !!settings.forward.supportForWebXR;
+    } else {
+        settings.lite.localOnly = true;
+        settings.forward.useSSL = false;
+        settings.forward.supportForWebXR = false;
+    }
     settings.ui.useGlass = false;
 
     // Apply performance defaults once when migrating from full SysMocap.

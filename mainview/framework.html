@@ -439,7 +439,7 @@
                     <span v-show="!hasUpdate" class="bitninja-local-only-badge">
                         <i class="mdui-icon material-icons"
                             style="font-size: 18px; margin-left: -8px">check</i>
-                        LOCAL-ONLY
+                        {{settings.lite && settings.lite.allowHttpWebSocketWithUpdates ? 'ONLINE-READY' : 'LOCAL-OBS'}}
                     </span>
                     <div style="margin-top: 10px; position: relative" v-show="checkingUpdate">
                         <div class="mdui-progress">
@@ -505,12 +505,20 @@
                 <div class="settings-item">
                     <label class="mdui-switch">
                         <span><i class="mdui-icon material-icons"
-                                style="margin-right: 10px; margin-top: -3px">wifi_tethering</i>Allow HTTP/WebSocket with updates</span>
+                                style="margin-right: 10px; margin-top: -3px">wifi_tethering</i>Activate HTTP/WebSocket</span>
                         <input type="checkbox" v-model="settings.lite.allowHttpWebSocketWithUpdates" />
                         <i class="mdui-switch-icon"></i>
                     </label>
                     <div style="font-size: 12px; opacity: 0.58; margin-left: 42px; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                        Default OFF -> OBS! (Planned update to return this option)
+                        Default OFF for OBS. Turn ON to activate HTTP/WebSocket output on the selected port.
+                    </div>
+                </div>
+                <div class="settings-item bitninja-online-port-row" v-show="settings.lite && settings.lite.allowHttpWebSocketWithUpdates">
+                    <span style="display: inline-block; width: 56%; margin-left: 42px">HTTP/WebSocket Port</span>
+                    <input type="number" min="1024" max="65535" v-model="settings.forward.port"
+                        style="float: right; margin-right: 10px; width: 120px; background: transparent; color: inherit; border: 0; border-bottom: 1px solid rgba(255,255,255,0.22); padding: 4px" />
+                    <div style="font-size: 12px; opacity: 0.58; margin-left: 42px; clear: both; padding-top: 4px">
+                        Local endpoint: http://127.0.0.1:{{settings.forward.port || 8080}}
                     </div>
                 </div>
                 <!-- Setting Tab: Show Document -->

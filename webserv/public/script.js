@@ -562,14 +562,21 @@ if (useXR) renderer.setAnimationLoop( function () {
 
 } );
 
-socket.on("message",  function (evt) {
-    // console.log(evt.data);
-
-    var mydata = JSON.parse(evt);
-    // console.log(mydata);
-    if (!mydata.type) return;
+socket.on("message", function (evt) {
+    // Bitninja mod1O: Socket.IO may deliver either a JSON string or an object.
+    // The old SysMocap web viewer assumed JSON strings only, so the model could
+    // load in T-pose but never animate when mod1O forwarded live objects.
+    let mydata = null;
+    try {
+        mydata = (typeof evt === "string") ? JSON.parse(evt) : evt;
+    } catch (err) {
+        console.warn("[Bitninja mod1O] Could not parse mocap message", err, evt);
+        return;
+    }
+    if (!mydata || !mydata.type) return;
     if (mydata.type != "xf-sysmocap-data") return;
     mocapData = mydata;
+    window.__bitninjaLastMocapPacketAt = Date.now();
     // animateVRM(currentVrm, mydata);
 });
 

@@ -62,6 +62,13 @@ if (globalSettings.forward.enableForwarding)
     ipcRenderer = require("electron").ipcRenderer;
 // my_server = require("../webserv/server.js");
 
+// Bitninja mod1O forwarding cleanup.
+if (ipcRenderer) {
+    window.addEventListener("beforeunload", function () {
+        try { ipcRenderer.send("stopWebServer"); } catch (err) {}
+    });
+}
+
 // import Helper Functions from Kalidokit
 const remap = Kalidokit.Utils.remap;
 const clamp = Kalidokit.Utils.clamp;
@@ -238,7 +245,7 @@ var fileType = modelPath
 
 var skeletonHelper = null;
 
-// init server
+// init optional mod1O HTTP/WebSocket server
 if (ipcRenderer)
     ipcRenderer.send(
         "startWebServer",
@@ -1017,7 +1024,7 @@ function bitninjaUpdatePerfOverlay() {
         : "no video";
     overlay.style.display = "block";
     overlay.textContent = [
-        "Bitninja Mod1L Latency Doctor",
+        "Bitninja Mod1O Latency Doctor",
         `mode: ${bitninjaTrackingMode}` ,
         `target mocap/render: ${targetMocapFps}/${bitninjaRenderFpsCap} fps`,
         `video: ${videoInfo}`,
@@ -1041,7 +1048,7 @@ setInterval(() => {
     bitninjaUpdatePerfOverlay();
     if (bitninjaTelemetry && bitninjaTelemetry.overlayVisible) {
         console.log(
-            `[Bitninja Mod1L ${bitninjaTrackingMode}/${bitninjaTrackerInputMode}] lastInfer=${Math.round(bitninjaTelemetry.lastInferMs)}ms ` +
+            `[Bitninja Mod1O ${bitninjaTrackingMode}/${bitninjaTrackerInputMode}] lastInfer=${Math.round(bitninjaTelemetry.lastInferMs)}ms ` +
             `maxInfer=${Math.round(bitninjaTelemetry.maxInferMs)}ms ` +
             `sent=${bitninjaTelemetry.sent} results=${bitninjaTelemetry.results} ` +
             `busyDrops=${bitninjaTelemetry.busyDrops} errors=${bitninjaTelemetry.errors}`

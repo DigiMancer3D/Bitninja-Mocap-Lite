@@ -14,9 +14,9 @@ This fork is designed for creators who want a lighter local VRM mocap setup with
 
 ## Status
 
-Current fork version: `v0.8.3-mod1L`
+Current fork version: `v0.8.3-mod1O`
 
-`mod1L` means **Modded version 1 - Local**.
+`mod1O` means **Modded version 1 - Online**.
 
 A future online/websocket variant may use `mod1O`, meaning **Modded version 1 - Online**.
 
@@ -125,3 +125,20 @@ This is a fork/mod of [SysMocap by xianfei](https://github.com/xianfei/SysMocap)
 
 Original project:
 [SysMoCap](https://github.com/xianfei/SysMocap)
+
+
+---
+
+## Bitninja mod1O Online Notes
+
+`mod1O` keeps the OBS/local performance defaults from `mod1L`, but restores an optional HTTP/WebSocket output path.
+
+The HTTP/WebSocket toggle is OFF by default. Turn it ON only when another tool needs live mocap data over the local network.
+
+Default endpoint when enabled:
+
+```text
+http://127.0.0.1:8080
+```
+
+The OBS Fast and OBS Smooth presets remain local-performance focused and do not require HTTP/WebSocket output.

@@ -1,5 +1,5 @@
 /**
- *  Main Node Process for Bitninja Mocap Lite
+ *  Main Node Process for Bitninja Mocap Lite mod1O
  *
  *  A part of SysMocap, open sourced under Mozilla Public License 2.0
  *
@@ -428,19 +428,79 @@ ipcMain.on("openPDF", function (event, arg) {
     createPdfViewerWindow(arg);
 });
 
-// Bitninja Lite is local-only: HTTP/WebSocket forwarding is intentionally disabled.
+// Bitninja mod1O: optional HTTP/WebSocket forwarding.
 var worker = null;
+
+function bitninjaEnsureForwardingWorker() {
+    if (worker) return worker;
+    worker = new Worker(path.join(__dirname, "webserv", "worker.js"));
+    worker.on("error", function (err) {
+        console.error("[Bitninja mod1O] Forwarding worker error:", err);
+        if (mainWindow) mainWindow.webContents.send("bitninjaForwardingStatus", {
+            active: false,
+            error: String(err && err.message ? err.message : err),
+        });
+    });
+    worker.on("exit", function (code) {
+        if (code !== 0) console.log("[Bitninja mod1O] Forwarding worker exited:", code);
+        worker = null;
+        if (mainWindow) mainWindow.webContents.send("bitninjaForwardingStatus", {
+            active: false,
+            exited: code,
+        });
+    });
+    return worker;
+}
+
 ipcMain.on("startWebServer", function (event, ...arg) {
-    console.log("Bitninja Lite: mocap forwarding is disabled.");
+    try {
+        const forwardingWorker = bitninjaEnsureForwardingWorker();
+        forwardingWorker.postMessage({ type: "startWebServer", arg: arg });
+        console.log("[Bitninja mod1O] HTTP/WebSocket forwarding requested on port", arg[0]);
+        if (mainWindow) mainWindow.webContents.send("bitninjaForwardingStatus", {
+            active: true,
+            port: arg[0],
+        });
+    } catch (err) {
+        console.error("[Bitninja mod1O] Could not start forwarding:", err);
+        if (mainWindow) mainWindow.webContents.send("bitninjaForwardingStatus", {
+            active: false,
+            error: String(err && err.message ? err.message : err),
+        });
+    }
 });
+
 ipcMain.on("sendBoradcast", function (event, arg) {
-    // no-op: local OBS capture only
+    if (!worker) return;
+    try {
+        worker.postMessage({ type: "sendBroadcast", arg: arg });
+    } catch (err) {
+        console.error("[Bitninja mod1O] Forwarding send failed:", err);
+    }
 });
+
 ipcMain.on("sendBoradcastNew", function (event, arg) {
+    // Keep the local render-forward path used by Bitninja OBS capture.
     if (mainWindow) mainWindow.webContents.send("sendRenderDataForward", arg);
+    if (worker) {
+        try {
+            worker.postMessage({ type: "sendBroadcast", arg: arg });
+        } catch (err) {}
+    }
 });
+
 ipcMain.on("stopWebServer", function (event, arg) {
+    if (!worker) return;
+    try {
+        worker.postMessage({ type: "stopWebServer" });
+        worker.terminate();
+    } catch (err) {
+        console.error("[Bitninja mod1O] Could not stop forwarding worker:", err);
+    }
     worker = null;
+    if (mainWindow) mainWindow.webContents.send("bitninjaForwardingStatus", {
+        active: false,
+    });
 });
 
 // This method will be called when Electron has finished
