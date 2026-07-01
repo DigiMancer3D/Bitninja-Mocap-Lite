@@ -96,26 +96,21 @@ npm install
 ## Local VRM library
 
 ### Put .vrm files in:
-
 `models/`
 
 ### Optional thumbnails go in:
-
 `models/img/`
 
 ### Use the same base filename:
-
 `models/MyModel.vrm`
 `models/img/MyModel.png`
 
 ### Then click:
-
 `Library -> Refresh Local VRM Library`
 `OBS background`
 
 
 ## The default OBS background color is:
-
 `#3B2364`
 `RGB(59,35,100)`
 
