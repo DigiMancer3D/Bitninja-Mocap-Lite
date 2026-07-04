@@ -616,6 +616,10 @@ if (typeof require != "undefined") {
             settings.lite.renderFps = 30;
             settings.lite.defaultView = "half";
             settings.lite.lockHorizontal = true;
+            settings.lite.lipSyncMode = "none";
+            settings.lite.audioLipAssist = false;
+            settings.lite.eyeTrackingEnabled = false;
+            settings.lite.fingerSyncMode = "none";
             settings.mediapipe.modelComplexity = "0";
             settings.mediapipe.smoothLandmarks = true;
             settings.mediapipe.refineFaceLandmarks = false;
@@ -627,6 +631,8 @@ if (typeof require != "undefined") {
             min: "Min",
             fast: "OBS Fast",
             smooth: "OBS Smooth",
+            game: "Game",
+            talks: "Talks",
             balanced: "Balanced",
             holistic: "Face/Hands",
             max: "Max",
@@ -651,6 +657,47 @@ if (typeof require != "undefined") {
             settings.mediapipe.modelComplexity = "0";
             settings.mediapipe.minDetectionConfidence = "0.45";
             settings.mediapipe.minTrackingConfidence = "0.45";
+        } else if (preset === "game") {
+            // Game: OBS Smooth body tracking plus microphone lip timing, with finger service off.
+            settings.lite.trackingMode = "pose_fast";
+            settings.lite.trackerInputMode = "downsample";
+            settings.lite.trackerInputWidth = 160;
+            settings.lite.trackerInputHeight = 120;
+            settings.lite.poseFastInternalSmoothing = true;
+            settings.lite.lipSyncMode = "audio";
+            settings.lite.audioLipAssist = false;
+            settings.lite.eyeTrackingEnabled = false;
+            settings.lite.fingerSyncMode = "none";
+            settings.lite.targetFps = 12;
+            settings.lite.cameraMaxFps = 12;
+            settings.lite.renderFps = 30;
+            settings.lite.cameraWidth = 320;
+            settings.lite.cameraHeight = 240;
+            settings.lite.motionRotationLerp = 0.72;
+            settings.lite.motionPositionLerp = 0.62;
+            settings.lite.faceLerp = 0.22;
+        } else if (preset === "talks") {
+            // Talks: Holistic Full with Bitninja smoothing, camera mouth, audio assist, eye tracking, and simple fingers.
+            settings.lite.trackingMode = "holistic_full";
+            settings.lite.trackerInputMode = "downsample";
+            settings.lite.trackerInputWidth = 160;
+            settings.lite.trackerInputHeight = 120;
+            settings.lite.poseFastInternalSmoothing = true;
+            settings.lite.lipSyncMode = "simple";
+            settings.lite.audioLipAssist = true;
+            settings.lite.eyeTrackingEnabled = true;
+            settings.lite.fingerSyncMode = "simple";
+            settings.lite.targetFps = 10;
+            settings.lite.cameraMaxFps = 10;
+            settings.lite.renderFps = 30;
+            settings.lite.cameraWidth = 320;
+            settings.lite.cameraHeight = 240;
+            settings.lite.motionRotationLerp = 0.72;
+            settings.lite.motionPositionLerp = 0.62;
+            settings.lite.faceLerp = 0.22;
+            settings.mediapipe.smoothLandmarks = true;
+            settings.mediapipe.refineFaceLandmarks = true;
+            settings.mediapipe.modelComplexity = "0";
         } else if (preset === "balanced") {
             settings.lite.trackingMode = "pose_fast";
             settings.lite.trackerInputMode = "downsample";
