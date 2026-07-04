@@ -137,7 +137,7 @@ Some Electron/Chromium GPU warnings may appear in terminal on Linux/NVIDIA syste
 
 ## Credits
 
-This is a fork/mod of SysMocap by xianfei.
+This is a fork-mod of [SysMocap by xianfei](https://github.com/xianfei/SysMocap).
 
 Original project:
-(SysMoCap)[https://github.com/xianfei/SysMocap]
+[SysMoCap](https://github.com/xianfei/SysMocap)
