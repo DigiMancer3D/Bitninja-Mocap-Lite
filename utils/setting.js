@@ -7,7 +7,7 @@ const storage = require("electron-localstorage");
 var remote = require("@electron/remote");
 storage.setStoragePath(remote.getGlobal("storagePath").jsonPath);
 
-var currentVer = 0.7330;
+var currentVer = 0.7350;
 
 const defaultSettings = {
     ui: {
@@ -52,6 +52,10 @@ const defaultSettings = {
         trackerInputWidth: 160,
         trackerInputHeight: 120,
         poseFastInternalSmoothing: false,
+        lipSyncMode: "none",
+        audioLipAssist: false,
+        eyeTrackingEnabled: false,
+        fingerSyncMode: "none",
         activePerfPreset: "fast",
         allowHttpWebSocketWithUpdates: false,
         targetFps: 12,
@@ -131,6 +135,10 @@ function applyLiteLocks(settings) {
         settings.lite.trackerInputWidth = 160;
         settings.lite.trackerInputHeight = 120;
         settings.lite.poseFastInternalSmoothing = false;
+        settings.lite.lipSyncMode = "none";
+        settings.lite.audioLipAssist = false;
+        settings.lite.eyeTrackingEnabled = false;
+        settings.lite.fingerSyncMode = "none";
         settings.lite.obsBgColor = "#3B2364";
         settings.lite.defaultView = "half";
         settings.lite.lockHorizontal = true;
@@ -168,7 +176,13 @@ function applyLiteLocks(settings) {
     settings.lite.trackerInputWidth = Math.max(96, Math.min(640, Number(settings.lite.trackerInputWidth || 160)));
     settings.lite.trackerInputHeight = Math.max(72, Math.min(480, Number(settings.lite.trackerInputHeight || 120)));
     if (typeof settings.lite.poseFastInternalSmoothing === "undefined") settings.lite.poseFastInternalSmoothing = false;
-    if (!settings.lite.activePerfPreset || !["min", "fast", "smooth", "balanced", "holistic", "max"].includes(settings.lite.activePerfPreset)) settings.lite.activePerfPreset = "fast";
+    if (!settings.lite.lipSyncMode || !["none", "simple", "full", "audio"].includes(settings.lite.lipSyncMode)) settings.lite.lipSyncMode = "none";
+    if (typeof settings.lite.audioLipAssist === "undefined") settings.lite.audioLipAssist = false;
+    if (typeof settings.lite.eyeTrackingEnabled === "undefined") settings.lite.eyeTrackingEnabled = false;
+    settings.lite.audioLipAssist = !!settings.lite.audioLipAssist;
+    settings.lite.eyeTrackingEnabled = !!settings.lite.eyeTrackingEnabled;
+    if (!settings.lite.fingerSyncMode || !["none", "simple", "full"].includes(settings.lite.fingerSyncMode)) settings.lite.fingerSyncMode = "none";
+    if (!settings.lite.activePerfPreset || !["min", "fast", "smooth", "balanced", "holistic", "max", "game", "talks"].includes(settings.lite.activePerfPreset)) settings.lite.activePerfPreset = "fast";
     if (typeof settings.lite.allowHttpWebSocketWithUpdates === "undefined") settings.lite.allowHttpWebSocketWithUpdates = false;
     if (!settings.lite.obsBgColor) settings.lite.obsBgColor = "#3B2364";
     if (!settings.lite.defaultView || !["full", "half", "face"].includes(settings.lite.defaultView)) settings.lite.defaultView = "half";
