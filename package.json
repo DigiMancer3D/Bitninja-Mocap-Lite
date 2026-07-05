@@ -1,6 +1,6 @@
 {
   "name": "bitninja-mocap-lite",
-  "version": "0.8.3-mod1O",
+  "version": "0.8.3-mod2O",
   "description": "A local-only, OBS-focused lightweight SysMocap fork for one-webcam VRM capture.",
   "main": "main.js",
   "scripts": {
