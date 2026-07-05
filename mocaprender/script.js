@@ -11,7 +11,22 @@
 // import setting utils
 const globalSettings = window.parent.window.sysmocapApp.settings;
 const liteSettings = globalSettings.lite || {}; // Stage 4 low-latency performance patch
-const bitninjaRequestedTrackingMode = String(liteSettings.trackingMode || "pose_fast"); // Stage 6 pose-fast tracking engine
+function bitninjaLipServiceMode(value) {
+    value = String(value || "none").toLowerCase();
+    return ["none", "simple", "full", "audio"].includes(value) ? value : "none";
+}
+function bitninjaFingerServiceMode(value) {
+    value = String(value || "none").toLowerCase();
+    return ["none", "simple", "full"].includes(value) ? value : "none";
+}
+const bitninjaLipSyncMode = bitninjaLipServiceMode(liteSettings.lipSyncMode);
+const bitninjaAudioLipAssist = liteSettings.audioLipAssist === true;
+const bitninjaEyeTrackingEnabled = liteSettings.eyeTrackingEnabled === true;
+const bitninjaFingerSyncMode = bitninjaFingerServiceMode(liteSettings.fingerSyncMode);
+const bitninjaNeedsHolisticFull = bitninjaLipSyncMode === "full" || bitninjaFingerSyncMode === "full" || bitninjaEyeTrackingEnabled;
+const bitninjaRequestedTrackingMode = bitninjaNeedsHolisticFull
+    ? "holistic_full"
+    : String(liteSettings.trackingMode || "pose_fast"); // Stage 6 pose-fast tracking engine
 let bitninjaTrackingMode = bitninjaRequestedTrackingMode;
 const bitninjaTrackerInputMode = String(liteSettings.trackerInputMode || "downsample"); // Stage 7 downsampled tracker input
 const bitninjaTrackerInputWidth = liteNumber(liteSettings.trackerInputWidth, 192, 96, 640);
@@ -582,17 +597,221 @@ const rigFace = (riggedFace) => {
         )
     );
 
-    //PUPILS
-    //interpolate pupil and keep a copy of the value
-    let lookTarget = new THREE.Euler(
-        lerp(oldLookTarget.x, riggedFace.pupil.y, 0.4),
-        lerp(oldLookTarget.y, riggedFace.pupil.x, 0.4),
+    // PUPILS / LOOK TARGET
+    // Stage 12: keep eye movement behind its own toggle so lip sync can run without forced eye motion.
+    if (bitninjaEyeTrackingEnabled) bitninjaApplyEyeTracking(riggedFace);
+};
+
+
+// Bitninja mod2/service-r1 helpers. These keep services modular and low-lag:
+// - Lip Service can be Off, Simple camera-mouth, Full face mesh, or Audio microphone.
+// - Audio Lip Assist can blend microphone timing with Simple or Full without allowing Simple+Full together.
+// - Eye tracking is an independent toggle and may force Holistic Full so face landmarks exist.
+// - Simple Finger can use hand landmarks when available, or fall back to low-cost pose wrist curls.
+const BITNINJA_MOUTH_PRESETS = {
+    A: "aa",
+    I: "ih",
+    E: "ee",
+    O: "oh",
+    U: "ou",
+};
+let bitninjaAudioLipState = {
+    requested: false,
+    ready: false,
+    denied: false,
+    audioContext: null,
+    analyser: null,
+    data: null,
+    stream: null,
+    level: 0,
+    noiseFloor: 0.012,
+    status: "off",
+};
+let bitninjaSimpleLipLevel = 0;
+
+function bitninjaExpressionValue(name) {
+    if (!currentVrm || !currentVrm.expressionManager) return 0;
+    return currentVrm.expressionManager.getValue(name) || 0;
+}
+
+function bitninjaSetExpression(name, value, lerpAmount = liteMotion.faceLerp) {
+    if (!currentVrm || !currentVrm.expressionManager) return;
+    value = clamp(Number(value) || 0, 0, 1);
+    currentVrm.expressionManager.setValue(name, lerp(value, bitninjaExpressionValue(name), lerpAmount));
+}
+
+function bitninjaSetExpressionResponsive(name, value, blend = 0.78) {
+    if (!currentVrm || !currentVrm.expressionManager) return;
+    value = clamp(Number(value) || 0, 0, 1);
+    const current = bitninjaExpressionValue(name);
+    currentVrm.expressionManager.setValue(name, current + (value - current) * clamp(blend, 0.05, 1));
+}
+
+function bitninjaAudioLipShouldRun() {
+    return bitninjaLipSyncMode === "audio" || (bitninjaAudioLipAssist && (bitninjaLipSyncMode === "simple" || bitninjaLipSyncMode === "full"));
+}
+
+function bitninjaStartAudioLipSync() {
+    if (!bitninjaAudioLipShouldRun() || bitninjaAudioLipState.requested) return;
+    bitninjaAudioLipState.requested = true;
+    bitninjaAudioLipState.status = "requesting";
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof AudioContextCtor === "undefined") {
+        bitninjaAudioLipState.denied = true;
+        bitninjaAudioLipState.status = "unavailable";
+        return;
+    }
+    navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+        .then((stream) => {
+            const audioContext = new AudioContextCtor({ latencyHint: "interactive" });
+            if (audioContext.state === "suspended") audioContext.resume().catch(() => {});
+            const analyser = audioContext.createAnalyser();
+            analyser.fftSize = 512;
+            analyser.smoothingTimeConstant = 0.03;
+            const source = audioContext.createMediaStreamSource(stream);
+            source.connect(analyser);
+            bitninjaAudioLipState.audioContext = audioContext;
+            bitninjaAudioLipState.analyser = analyser;
+            bitninjaAudioLipState.data = new Float32Array(analyser.fftSize);
+            bitninjaAudioLipState.stream = stream;
+            bitninjaAudioLipState.ready = true;
+            bitninjaAudioLipState.status = "ready";
+        })
+        .catch((err) => {
+            bitninjaAudioLipState.denied = true;
+            bitninjaAudioLipState.status = "denied";
+            console.warn("Bitninja audio lip sync unavailable.", err);
+        });
+}
+
+function bitninjaGetAudioLipLevel() {
+    if (!bitninjaAudioLipShouldRun()) return 0;
+    bitninjaStartAudioLipSync();
+    if (!bitninjaAudioLipState.ready || !bitninjaAudioLipState.analyser || !bitninjaAudioLipState.data) return 0;
+
+    bitninjaAudioLipState.analyser.getFloatTimeDomainData(bitninjaAudioLipState.data);
+    let sum = 0;
+    for (const v of bitninjaAudioLipState.data) sum += v * v;
+    const rms = Math.sqrt(sum / bitninjaAudioLipState.data.length);
+
+    if (rms < bitninjaAudioLipState.noiseFloor) {
+        bitninjaAudioLipState.noiseFloor = bitninjaAudioLipState.noiseFloor * 0.88 + rms * 0.12;
+    } else {
+        bitninjaAudioLipState.noiseFloor = bitninjaAudioLipState.noiseFloor * 0.995 + rms * 0.005;
+    }
+
+    const threshold = Math.max(0.010, bitninjaAudioLipState.noiseFloor * 2.25);
+    const target = clamp((rms - threshold) * 22.0, 0, 1);
+    const attack = 0.78;
+    const release = target < 0.03 ? 0.55 : 0.34;
+    const alpha = target > bitninjaAudioLipState.level ? attack : release;
+    bitninjaAudioLipState.level += (target - bitninjaAudioLipState.level) * alpha;
+    if (target < 0.015 && rms < threshold) bitninjaAudioLipState.level *= 0.45;
+    return clamp(bitninjaAudioLipState.level, 0, 1);
+}
+
+function bitninjaPointDistance(a, b) {
+    if (!a || !b) return 0;
+    const dx = (a.x || 0) - (b.x || 0);
+    const dy = (a.y || 0) - (b.y || 0);
+    const dz = (a.z || 0) - (b.z || 0);
+    return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+function bitninjaMouthGapLevel(faceLandmarks) {
+    if (!faceLandmarks || faceLandmarks.length < 292) return 0;
+    const upperLip = faceLandmarks[13];
+    const lowerLip = faceLandmarks[14];
+    const leftCorner = faceLandmarks[61];
+    const rightCorner = faceLandmarks[291];
+    const mouthWidth = Math.max(0.001, bitninjaPointDistance(leftCorner, rightCorner));
+    const gap = bitninjaPointDistance(upperLip, lowerLip);
+    const ratio = gap / mouthWidth;
+    return clamp((ratio - 0.025) * 3.4, 0, 1);
+}
+
+function bitninjaApplyMouthLevel(level, responsive = true) {
+    level = clamp(level, 0, 1);
+    const set = responsive ? bitninjaSetExpressionResponsive : bitninjaSetExpression;
+    set(BITNINJA_MOUTH_PRESETS.A, level, responsive ? 0.80 : 0.25);
+    set(BITNINJA_MOUTH_PRESETS.O, level * 0.34, responsive ? 0.72 : 0.25);
+    set(BITNINJA_MOUTH_PRESETS.E, level * 0.18, responsive ? 0.66 : 0.25);
+    set(BITNINJA_MOUTH_PRESETS.I, level * 0.12, responsive ? 0.62 : 0.25);
+    set(BITNINJA_MOUTH_PRESETS.U, level * 0.10, responsive ? 0.62 : 0.25);
+}
+
+function bitninjaApplyAudioLipSync() {
+    if (!bitninjaAudioLipShouldRun() || !currentVrm || !currentVrm.expressionManager) return;
+    bitninjaApplyMouthLevel(bitninjaGetAudioLipLevel(), true);
+}
+
+function bitninjaApplySimpleLipSync(results) {
+    if (bitninjaLipSyncMode !== "simple" || !currentVrm || !currentVrm.expressionManager) return;
+    let target = 0;
+    if (results && results.faceLandmarks) target = bitninjaMouthGapLevel(results.faceLandmarks);
+    if (bitninjaAudioLipAssist) target = Math.max(target, bitninjaGetAudioLipLevel() * 0.92);
+    bitninjaSimpleLipLevel += (target - bitninjaSimpleLipLevel) * (target > bitninjaSimpleLipLevel ? 0.72 : 0.42);
+    if (target < 0.015) bitninjaSimpleLipLevel *= 0.50;
+    bitninjaApplyMouthLevel(bitninjaSimpleLipLevel, true);
+}
+
+function bitninjaStopAudioLipSync() {
+    try {
+        if (bitninjaAudioLipState.stream) {
+            for (const track of bitninjaAudioLipState.stream.getTracks()) track.stop();
+        }
+        if (bitninjaAudioLipState.audioContext) bitninjaAudioLipState.audioContext.close();
+    } catch (err) {}
+}
+
+function bitninjaApplyEyeTracking(riggedFace) {
+    if (!bitninjaEyeTrackingEnabled || !currentVrm || !currentVrm.lookAt || !currentVrm.lookAt.applier || !riggedFace || !riggedFace.pupil) return;
+    const lookTarget = new THREE.Euler(
+        lerp(oldLookTarget.x, riggedFace.pupil.y, 0.22),
+        lerp(oldLookTarget.y, riggedFace.pupil.x, 0.22),
         0,
         "XYZ"
     );
     oldLookTarget.copy(lookTarget);
     currentVrm.lookAt.applier.applyYawPitch(lookTarget.y, lookTarget.x);
-};
+}
+
+function bitninjaEstimateHandCurl(handLandmarks) {
+    if (!handLandmarks || handLandmarks.length < 21) return null;
+    const wrist = handLandmarks[0];
+    const palm = Math.max(0.001, bitninjaPointDistance(wrist, handLandmarks[9]));
+    const fingers = [
+        [8, 5],   // index tip / mcp
+        [12, 9],  // middle
+        [16, 13], // ring
+        [20, 17], // little
+    ];
+    let curlSum = 0;
+    for (const [tipIndex, mcpIndex] of fingers) {
+        const tipFromWrist = bitninjaPointDistance(wrist, handLandmarks[tipIndex]) / palm;
+        const mcpFromWrist = bitninjaPointDistance(wrist, handLandmarks[mcpIndex]) / palm;
+        curlSum += clamp(1.15 - (tipFromWrist - mcpFromWrist), 0.08, 0.92);
+    }
+    return curlSum / fingers.length;
+}
+
+function bitninjaSimpleFingerCurl(side, poseHand, phaseOffset, handLandmarks = null) {
+    if (bitninjaFingerSyncMode !== "simple" || fileType !== "vrm" || !poseHand) return;
+    const detectedCurl = bitninjaEstimateHandCurl(handLandmarks);
+    const t = performance.now() / 1000 + phaseOffset;
+    const idleCurl = 0.16 + Math.max(0, Math.sin(t * 1.4)) * 0.05;
+    const curl = detectedCurl === null ? idleCurl : clamp(detectedCurl, 0.08, 0.92);
+    const thumbCurl = detectedCurl === null ? 0.08 + Math.max(0, Math.sin(t * 1.2 + 0.7)) * 0.05 : clamp(curl * 0.72, 0.06, 0.72);
+    rigRotation(side + "Hand", { z: poseHand.z || 0, y: poseHand.y || 0, x: poseHand.x || 0 }, 1, liteMotion.rotationLerp);
+    for (const finger of ["Ring", "Index", "Middle", "Little"]) {
+        rigRotation(side + finger + "Proximal", { x: curl, y: 0, z: 0 }, 1, 0.10);
+        rigRotation(side + finger + "Intermediate", { x: curl * 0.78, y: 0, z: 0 }, 1, 0.10);
+        rigRotation(side + finger + "Distal", { x: curl * 0.55, y: 0, z: 0 }, 1, 0.10);
+    }
+    rigRotation(side + "ThumbProximal", { x: thumbCurl, y: side === "Left" ? -0.08 : 0.08, z: 0 }, 1, 0.10);
+    rigRotation(side + "ThumbIntermediate", { x: thumbCurl * 0.7, y: 0, z: 0 }, 1, 0.10);
+    rigRotation(side + "ThumbDistal", { x: thumbCurl * 0.55, y: 0, z: 0 }, 1, 0.10);
+}
 
 var positionOffset = {
     x: 0,
@@ -617,7 +836,7 @@ const animateVRM = (vrm, results) => {
     const leftHandLandmarks = results.rightHandLandmarks;
     const rightHandLandmarks = results.leftHandLandmarks;
 
-    if (faceLandmarks) {
+    if (faceLandmarks && (bitninjaLipSyncMode === "full" || bitninjaEyeTrackingEnabled)) {
         riggedFace = Kalidokit.Face.solve(faceLandmarks, {
             runtime: "mediapipe",
             video: videoElement,
@@ -631,11 +850,11 @@ const animateVRM = (vrm, results) => {
         });
     }
 
-    if (leftHandLandmarks) {
+    if (leftHandLandmarks && bitninjaFingerSyncMode === "full") {
         riggedLeftHand = Kalidokit.Hand.solve(leftHandLandmarks, "Left");
     }
 
-    if (rightHandLandmarks && fileType == "vrm") {
+    if (rightHandLandmarks && fileType == "vrm" && bitninjaFingerSyncMode === "full") {
         riggedRightHand = Kalidokit.Hand.solve(rightHandLandmarks, "Right");
     }
 
@@ -648,8 +867,8 @@ const animateVRM = (vrm, results) => {
             riggedFace: riggedFace,
         });
 
-    // Animate Face
-    if (faceLandmarks) {
+    // Animate Face / Lip Service
+    if (faceLandmarks && bitninjaLipSyncMode === "full" && riggedFace) {
         const bitninjaManualYawRad = THREE.MathUtils.degToRad(captureTransform.yawDeg || 0);
         rigRotation("Neck", {
             x: riggedFace.head.x,
@@ -658,6 +877,14 @@ const animateVRM = (vrm, results) => {
             rotationOrder: riggedFace.head.rotationOrder,
         }, 0.7);
         if (fileType == "vrm") rigFace(riggedFace);
+        if (bitninjaAudioLipAssist) bitninjaApplyAudioLipSync();
+    } else if (bitninjaLipSyncMode === "simple") {
+        bitninjaApplySimpleLipSync(results);
+    } else if (bitninjaLipSyncMode === "audio") {
+        bitninjaApplyAudioLipSync();
+    }
+    if (bitninjaEyeTrackingEnabled && riggedFace && bitninjaLipSyncMode !== "full") {
+        bitninjaApplyEyeTracking(riggedFace);
     }
 
     // Animate Pose
@@ -693,8 +920,12 @@ const animateVRM = (vrm, results) => {
         rigRotation("RightLowerLeg", riggedPose.RightLowerLeg);
     }
 
-    // Animate Hands
-    if (leftHandLandmarks && fileType == "vrm") {
+    // Animate Hands / Finger Service
+    if (bitninjaFingerSyncMode === "simple" && riggedPose && fileType == "vrm") {
+        bitninjaSimpleFingerCurl("Left", riggedPose.LeftHand, 0.0, leftHandLandmarks);
+        bitninjaSimpleFingerCurl("Right", riggedPose.RightHand, 0.45, rightHandLandmarks);
+    }
+    if (bitninjaFingerSyncMode === "full" && leftHandLandmarks && fileType == "vrm") {
         rigRotation("LeftHand", {
             // Combine pose rotation Z and hand rotation X Y
             z: riggedPose.LeftHand.z,
@@ -732,7 +963,7 @@ const animateVRM = (vrm, results) => {
         );
         rigRotation("LeftLittleDistal", riggedLeftHand.LeftLittleDistal);
     }
-    if (rightHandLandmarks && fileType == "vrm") {
+    if (bitninjaFingerSyncMode === "full" && rightHandLandmarks && fileType == "vrm") {
         // riggedRightHand = Kalidokit.Hand.solve(rightHandLandmarks, "Right");
         rigRotation("RightHand", {
             // Combine Z axis from pose hand and X/Y axis from hand wrist rotation
@@ -859,8 +1090,8 @@ const onResults = (results) => {
 // Pose Fast is far lighter than Holistic Full because it skips face mesh + hand/finger models.
 // It still drives body, torso, arms, and wrists through Kalidokit Pose.
 const bitninjaPoseAvailable = typeof Pose !== "undefined";
-const bitninjaUsePoseFast = bitninjaRequestedTrackingMode === "pose_fast" && bitninjaPoseAvailable;
-if (bitninjaRequestedTrackingMode === "pose_fast" && !bitninjaPoseAvailable) {
+const bitninjaUsePoseFast = bitninjaTrackingMode === "pose_fast" && bitninjaPoseAvailable;
+if (bitninjaTrackingMode === "pose_fast" && !bitninjaPoseAvailable) {
     console.warn("Bitninja Pose Fast requested but @mediapipe/pose is not installed/loaded; falling back to Holistic Full.");
     bitninjaTrackingMode = "holistic_full";
 }
@@ -900,7 +1131,7 @@ if (bitninjaUsePoseFast) {
         smoothSegmentation: false,
         minDetectionConfidence: parseFloat(globalSettings.mediapipe.minDetectionConfidence),
         minTrackingConfidence: parseFloat(globalSettings.mediapipe.minTrackingConfidence),
-        refineFaceLandmarks: globalSettings.mediapipe.refineFaceLandmarks,
+        refineFaceLandmarks: !!globalSettings.mediapipe.refineFaceLandmarks || bitninjaEyeTrackingEnabled,
     });
 }
 // Pass tracker a callback function
@@ -1031,6 +1262,8 @@ function bitninjaUpdatePerfOverlay() {
         `tracker input: ${bitninjaTrackerInputMode === "downsample" ? ("canvas " + bitninjaTrackerInputWidth + "x" + bitninjaTrackerInputHeight) : "direct video"}`,
         `pose smoothing: ${bitninjaUsePoseFast ? (bitninjaPoseFastInternalSmoothing ? "internal on" : "internal off") : "holistic"}`,
         `preset: ${globalSettings.lite?.activePerfPreset || (bitninjaUsePoseFast ? "OBS Fast/Balanced" : "Face/Hands Test")}`,
+        `services: lip ${bitninjaLipSyncMode}${bitninjaAudioLipAssist ? "+audio" : ""} / eye ${bitninjaEyeTrackingEnabled ? "on" : "off"} / finger ${bitninjaFingerSyncMode}`,
+        `audio lip: ${bitninjaAudioLipShouldRun() ? bitninjaAudioLipState.status : "off"} lvl ${Math.round((bitninjaAudioLipState.level || 0) * 100)}%`,
         `sent/results: ${bitninjaTelemetry.sent}/${bitninjaTelemetry.results}`,
         `last inference: ${Math.round(bitninjaTelemetry.lastInferMs)} ms`,
         `max inference:  ${Math.round(bitninjaTelemetry.maxInferMs)} ms`,
@@ -1102,6 +1335,12 @@ function startLatestFramePump() {
     bitninjaSetPerfOverlayVisible(bitninjaTelemetry.overlayVisible);
 }
 
+
+function bitninjaStopSimpleLipSync() {
+    return bitninjaStopAudioLipSync();
+}
+
+window.addEventListener("beforeunload", bitninjaStopAudioLipSync);
 
 // switch use camera or video file
 if (localStorage.getItem("useCamera") == "camera") {
