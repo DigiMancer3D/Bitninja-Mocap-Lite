@@ -14,11 +14,11 @@ This fork is designed for creators who want a lighter local VRM mocap setup with
 
 ## Status
 
-Current fork version: `v0.8.3-mod1O`
+Current fork version: `v0.8.3-mod2O`
 
-`mod1O` means **Modded version 1 - Online**.
+`mod2O` means **Modded version 2 - Online**.
 
-A future online/websocket variant may use `mod1O`, meaning **Modded version 1 - Online**.
+The local OBS-only variant is `mod2L`; this branch is `mod2O`, the online/HTTP-WebSocket variant.
 
 ## Recommended OBS Presets
 
@@ -129,9 +129,23 @@ Original project:
 
 ---
 
-## Bitninja mod1O Online Notes
+## Mod2O Extended Online Services
 
-`mod1O` keeps the OBS/local performance defaults from `mod1L`, but restores an optional HTTP/WebSocket output path.
+`mod2O` combines the online/HTTP-WebSocket branch with the tested mod2 service controls from `mod2L`:
+
+- Lip Sync Service: Off, Simple / Camera Mouth, Full / Face Mesh, or Audio / Microphone.
+- Audio Lip Assist: optional microphone assist that can run by itself or assist Simple/Full lip sync.
+- Finger Sync Service: Off, Simple / Lightweight, or Full / Hand Mesh.
+- Eye Tracking / Look Target: optional toggle that attempts face/iris-style look-target behavior when face landmarks are available.
+- Game preset: OBS-smooth style capture with audio lip sync.
+- Talks preset: Holistic Full, Bitninja smoothing, simple camera lip, audio assist, eye tracking, and simple fingers.
+- HTTP/WebSocket output remains optional and OFF by default. Turn it ON only when another local/network tool needs live mocap data.
+
+Simple and Full lip services remain mutually exclusive. Audio can run alone or assist one camera/face lip service. Simple and Full finger services remain mutually exclusive.
+
+## Bitninja mod2O Online Notes
+
+`mod2O` keeps the OBS/local performance defaults from `mod2L`, while preserving the optional HTTP/WebSocket output path from `mod1O`.
 
 The HTTP/WebSocket toggle is OFF by default. Turn it ON only when another tool needs live mocap data over the local network.
 
