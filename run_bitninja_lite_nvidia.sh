@@ -34,24 +34,3 @@ echo "ERROR: Electron binary not found at $ELECTRON_BIN"
 echo "Try: npm install"
 exit 1
 
-#!/usr/bin/env bash
-set -euo pipefail
-cd "$(dirname "$0")"
-
-SANDBOX_ARGS=()
-if [ -f "node_modules/electron/dist/chrome-sandbox" ]; then
-  sandbox_info="$(stat -c '%U:%G %a' node_modules/electron/dist/chrome-sandbox 2>/dev/null || true)"
-  if [ "$sandbox_info" != "root:root 4755" ]; then
-    echo "Bitninja Mocap Lite: Electron sandbox helper is not root:root 4755; using --no-sandbox for dev launch."
-    SANDBOX_ARGS+=(--no-sandbox)
-  fi
-fi
-
-export BITNINJA_FORCE_NVIDIA=1
-export __NV_PRIME_RENDER_OFFLOAD=1
-export __GLX_VENDOR_LIBRARY_NAME=nvidia
-export __VK_LAYER_NV_optimus=NVIDIA_only
-export GDK_BACKEND=x11
-export ELECTRON_OZONE_PLATFORM_HINT=x11
-
-exec npx electron "${SANDBOX_ARGS[@]}" .
